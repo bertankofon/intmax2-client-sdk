@@ -5,7 +5,6 @@ import {
   encodeFunctionData,
   erc20Abi,
   erc721Abi,
-  Hex,
   http,
   isAddress,
   parseEther,
@@ -13,7 +12,6 @@ import {
   PrivateKeyAccount,
   PublicClient,
   sha256,
-  toHex,
   WriteContractParameters,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -30,7 +28,8 @@ import {
   FeeResponse,
   FetchTransactionsRequest,
   FetchWithdrawalsResponse,
-  getPkFromMnemonic,
+  generateEntropy,
+  getPkFromEntropy,
   IndexerFetcher,
   INTMAXClient,
   IntMaxEnvironment,
@@ -778,25 +777,20 @@ export class IntMaxNodeClient implements INTMAXClient {
     }
   }
 
-  async #entropy(networkSignedMessage: `0x${string}`, hashedSignature: string) {
-    const securitySeed = sha256(networkSignedMessage);
-    const entropyPreImage = (securitySeed + hashedSignature.slice(2)) as Hex;
-    const entropy = sha256(entropyPreImage);
-    const hdKey = getPkFromMnemonic(entropy);
+  async #entropy(
+    networkSignedMessage: `0x${string}`,
+    hashedSignature: string,
+  ) {
+    const entropy = generateEntropy(networkSignedMessage as `0x${string}`, hashedSignature);
+    const hdKey = getPkFromEntropy(entropy);
     if (!hdKey) {
-      throw Error('No key found');
+      throw new Error("Can't get private key from mnemonic");
     }
 
-    const keySet = await generate_intmax_account_from_eth_key(toHex(hdKey));
-
-    if (!keySet) {
-      throw new Error('No key found');
-    }
+    const keySet = await generate_intmax_account_from_eth_key(hdKey);
 
     this.address = keySet.pubkey;
     this.#privateKey = keySet.privkey;
-
-    return;
   }
 
   async #fetchUserData(): Promise<JsUserData> {
