@@ -1,5 +1,4 @@
 // General
-import { JsDerive } from '../../wasm/browser/intmax2_wasm_lib';
 
 export interface FetchItemsRequest<T> {
   page?: number;
@@ -104,7 +103,7 @@ export interface BroadcastTransactionRequest {
   token: Token;
   claim_beneficiary?: `0x${string}`;
 }
-export interface BroadcastTransactionResponse extends TransactionResult { }
+export interface BroadcastTransactionResponse extends TransactionResult {}
 
 export interface TransactionResult {
   txTreeRoot: string;
@@ -178,14 +177,13 @@ export interface ClaimWithdrawalTransactionResponse {
   status: TransactionStatus;
 }
 
-export interface WithdrawalResponse extends TransactionResult { }
+export interface WithdrawalResponse extends TransactionResult {}
 
 export interface WithdrawRequest {
   address: `0x${string}`;
   token: Token;
   amount: number;
   claim_beneficiary?: `0x${string}`;
-  derivations?: JsDerive;
 }
 export interface LoginResponse {
   address: string;
@@ -217,6 +215,7 @@ export interface INTMAXClient {
   fetchTokenBalances: () => Promise<TokenBalancesResponse>;
   getPrivateKey: () => Promise<string | undefined>;
   signMessage: (data: string) => Promise<SignMessageResponse>;
+  verifySignature: (signature: SignMessageResponse, message: string | Uint8Array) => Promise<boolean>;
 
   // transaction
   fetchTransactions: (params: FetchTransactionsRequest) => Promise<Transaction[]>;
