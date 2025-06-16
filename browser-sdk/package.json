@@ -26,7 +26,10 @@
     "copy-wasm": "mkdir -p dist/esm/wasm dist/cjs/wasm && cp -r src/wasm/* dist/esm/wasm/ && cp -r src/wasm/* dist/cjs/wasm/",
     "prepare": "pnpm build",
     "format": "prettier --write \"src/**/*.ts\"",
-    "lint": "eslint src --max-warnings=0 --fix"
+    "lint": "eslint src --max-warnings=0 --fix",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui"
   },
   "keywords": [
     "sdk",
@@ -38,23 +41,27 @@
   },
   "dependencies": {
     "@scure/bip32": "^1.7.0",
-    "@scure/bip39": "^1.5.1",
-    "axios": "^1.8.4",
-    "viem": "^2.22.8"
+    "@scure/bip39": "^1.6.0",
+    "axios": "^1.10.0",
+    "viem": "^2.31.3"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@typescript-eslint/eslint-plugin": "^8.21.0",
-    "@typescript-eslint/parser": "^8.21.0",
+    "@types/node": "^24.0.3",
+    "@typescript-eslint/eslint-plugin": "^8.34.0",
+    "@typescript-eslint/parser": "^8.34.0",
+    "@vitest/ui": "^3.2.3",
     "eslint": "^8.57.1",
-    "eslint-config-prettier": "^10.0.1",
+    "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-import": "^2.31.0",
-    "eslint-plugin-prettier": "^5.2.3",
+    "eslint-plugin-prettier": "^5.4.1",
     "eslint-plugin-unused-imports": "^4.1.4",
-    "node": "^22.13.0",
-    "prettier": "^3.4.2",
+    "happy-dom": "^18.0.1",
+    "msw": "^2.10.2",
+    "node": "^24.2.0",
+    "prettier": "^3.5.3",
     "rimraf": "^6.0.1",
-    "typescript": "^5.5.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.3"
   },
   "engines": {
     "node": ">=18"
