@@ -1,9 +1,9 @@
 import { HDKey } from '@scure/bip32';
 import { entropyToMnemonic, mnemonicToSeedSync } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
-import { encodePacked, Hex, hexToBytes, keccak256, sha256, toHex } from 'viem';
+import { encodePacked, Hex, hexToBytes, keccak256, sha256, toBytes, toHex } from 'viem';
 
-import { ContractWithdrawal } from '../types';
+import { ContractWithdrawal, type PredicateSignatureResponse } from '../types';
 
 export * from './api.utils';
 export * from './mappers';
@@ -56,7 +56,7 @@ export const getHdPrivateKeyFromMnemonic = (mnemonic: string, derivePath: string
   const seed = mnemonicToSeedSync(mnemonic);
   const hdKey = HDKey.fromMasterSeed(seed).derive(derivePath);
   return toHex(hdKey.privateKey!);
-}
+};
 
 export function getPkFromEntropy(
   entropy: string,
@@ -70,10 +70,7 @@ export function getPkFromEntropy(
   const derive_path = derivativePath?.derive_path ?? 0;
   const redeposit_derive_path = derivativePath?.redeposit_derive_path ?? 0;
 
-  return getHdPrivateKeyFromMnemonic(
-    mnemonic,
-    `m/44'/60'/${redeposit_derive_path}'/0/${derive_path}`,
-  );
+  return getHdPrivateKeyFromMnemonic(mnemonic, `m/44'/60'/${redeposit_derive_path}'/0/${derive_path}`);
 }
 
 export function getWithdrawHash(w: ContractWithdrawal): string {
@@ -102,4 +99,16 @@ export const generateEntropy = (networkSign: Hex, hashedSignature: string) => {
   combined.set(hashedSignatureBytes, networkSignBytes.length);
 
   return sha256(combined);
+};
+
+export const signaturesToBytes = (response: PredicateSignatureResponse) => {
+  if (!response) {
+    throw new Error('Could not convert API response, it was undefined');
+  }
+  return {
+    taskId: response.task_id,
+    expireByBlockNumber: response.expiry_block,
+    signerAddresses: response.signers,
+    signatures: response.signature.map((sig) => toBytes(sig)),
+  };
 };
