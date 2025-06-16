@@ -2,9 +2,12 @@
 
 This SDK is a client library for the INTMAX API. It is designed to help you integrate INTMAX services into your applications.
 
-For detailed interface specifications and usage instructions, please refer to the documentation.
+For detailed interface specifications and usage instructions, please refer to the documentation below:
 
-[INTMAX Client SDK Docs](https://aquatic-paperback-675.notion.site/INTMAX-Client-SDK-Docs-176d989987db8096a012d144ae0e0dba)
+- [📘 INTMAX Client SDK Docs (API Reference)](https://aquatic-paperback-675.notion.site/INTMAX-Client-SDK-Docs-176d989987db8096a012d144ae0e0dba)
+- [🔧 Integration Guide](https://aquatic-paperback-675.notion.site/INTMAX-Client-SDK-Integration-Guide-208d989987db809db876ff8c79e78853)
+
+Use these resources to quickly get started with building, integrating, and testing INTMAX-powered applications.
 
 ## Installation for browser
 
@@ -59,7 +62,7 @@ export interface INTMAXClient {
   fetchDeposits: (params: FetchTransactionsRequest) => Promise<(Transaction | null)[]>;
 
   // withdrawal
-  fetchPendingWithdrawals: (params: FetchWithdrawalsRequest) => Promise<FetchWithdrawalsResponse>;
+  fetchWithdrawals: (params: FetchWithdrawalsRequest) => Promise<FetchWithdrawalsResponse>;
   withdraw: (params: WithdrawRequest) => Promise<WithdrawalResponse>;
   claimWithdrawal: (params: ContractWithdrawal[]) => Promise<ClaimWithdrawalTransactionResponse>;
 
@@ -275,13 +278,13 @@ const withdraw = await intmaxClient.withdraw({
 ### Fetch withdrawals (needToClaim, etc.)
 
 ```javascript
-const withdrawals = await intmaxClient.fetchPendingWithdrawals(); // Record<WithdrawalsStatus, ContractWithdrawal[]>
+const withdrawals = await intmaxClient.fetchWithdrawals(); // Record<WithdrawalsStatus, ContractWithdrawal[]>
 ```
 
 ### Claim withdrawals
 
 ```javascript
-const withdrawals = await intmaxClient.fetchPendingWithdrawals(); // Record<WithdrawalsStatus, ContractWithdrawal[]>
+const withdrawals = await intmaxClient.fetchWithdrawals(); // Record<WithdrawalsStatus, ContractWithdrawal[]>
 const claim = await intmaxClient.claimWithdrawal(withdrawals.needClaim); // Claim response (should be add additional check for receiver address you can claim withdrawals only for your address)
 // {
 //   txHash: `0x${string}`;
