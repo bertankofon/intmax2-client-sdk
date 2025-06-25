@@ -27,6 +27,7 @@ import {
   DEVNET_ENV,
   FeeResponse,
   FetchTransactionsRequest,
+  FetchWithdrawalsRequest,
   FetchWithdrawalsResponse,
   generateEntropy,
   getPkFromEntropy,
@@ -48,7 +49,6 @@ import {
   SDKUrls,
   SignMessageResponse,
   sleep,
-  spendFundsMessage,
   TESTNET_ENV,
   Token,
   TokenBalance,
@@ -77,6 +77,7 @@ import {
   generate_fee_payment_memo,
   generate_intmax_account_from_eth_key,
   generate_withdrawal_transfers,
+  get_balances_without_sync,
   get_user_data,
   initSync,
   JsFeeQuote,
@@ -98,6 +99,7 @@ import {
   sync_claims,
   sync_withdrawals,
   verify_signature,
+  TokenBalance as WasmTokenBalance,
 } from '../wasm/browser/intmax2_wasm_lib';
 import wasmBytes from '../wasm/browser/intmax2_wasm_lib_bg.wasm?url';
 
@@ -155,6 +157,8 @@ const getWalletProviderType = (): string => {
 };
 
 export class IntMaxClient implements INTMAXClient {
+  #intervalId: number | null | NodeJS.Timeout = null;
+  #isSyncInProgress: boolean = false;
   readonly #config: Config;
   readonly #tokenFetcher: TokenFetcher;
   readonly #indexerFetcher: IndexerFetcher;
@@ -208,6 +212,9 @@ export class IntMaxClient implements INTMAXClient {
     this.#tokenFetcher = new TokenFetcher(environment);
     this.#indexerFetcher = new IndexerFetcher(environment);
     this.#predicateFetcher = new PredicateFetcher(environment);
+
+    //run sync job
+    this.#startPeriodicUserDataUpdate(30_000);
   }
 
   static async init({ environment }: ConstructorParams): Promise<IntMaxClient> {
@@ -353,14 +360,23 @@ export class IntMaxClient implements INTMAXClient {
     if (!this.isLoggedIn) {
       throw Error('Not logged in');
     }
-    const userData = await this.#fetchUserData();
+
+    let wasm_balances: WasmTokenBalance[] = [];
+    wasm_balances = await get_balances_without_sync(this.#config, this.#viewKey);
+
+    if (!wasm_balances.length) {
+      const userData = await this.#fetchUserData();
+      wasm_balances = userData.balances;
+    } else {
+      this.#fetchUserData();
+    }
 
     let tokens = this.#tokenFetcher.tokens;
     if (tokens.length === 0) {
       tokens = await this.#tokenFetcher.fetchTokens();
     }
 
-    const nftIds = userData.balances.reduce((acc, tb): number[] => {
+    const nftIds = wasm_balances.reduce((acc, tb): number[] => {
       const token = tokens.find((t) => t.tokenIndex === tb.token_index);
 
       if (!token) {
@@ -385,7 +401,7 @@ export class IntMaxClient implements INTMAXClient {
       ];
     }, [] as Token[]);
 
-    const balances = userData.balances.map((balance): TokenBalance => {
+    const balances = wasm_balances.map((balance): TokenBalance => {
       const token = tokens.find((t) => t.tokenIndex === balance.token_index);
 
       if (!token) {
@@ -685,8 +701,8 @@ export class IntMaxClient implements INTMAXClient {
     };
   }
 
-  async fetchWithdrawals(): Promise<FetchWithdrawalsResponse> {
-    return this.#txFetcher.fetchWithdrawals(this.#config, this.#viewKey);
+  async fetchWithdrawals({ cursor }: FetchWithdrawalsRequest = { cursor: null }): Promise<FetchWithdrawalsResponse> {
+    return this.#txFetcher.fetchWithdrawals(this.#config, this.#viewKey, cursor);
   }
 
   async claimWithdrawal(needClaimWithdrawals: ContractWithdrawal[]): Promise<ClaimWithdrawalTransactionResponse> {
@@ -863,7 +879,13 @@ export class IntMaxClient implements INTMAXClient {
     this.#viewKey = keySet.view_pair;
   }
 
-  async #fetchUserData(): Promise<JsUserData> {
+  async #syncUserData() {
+    if (this.#isSyncInProgress) {
+      return;
+    }
+    console.info('user_data_sync start');
+    this.#isSyncInProgress = true;
+
     const prevFetchData = localStorageManager.getItem<
       {
         fetchDate: number;
@@ -876,15 +898,10 @@ export class IntMaxClient implements INTMAXClient {
       const prevFetchDate = prevFetchDateObj.fetchDate;
       const currentDate = new Date().getTime();
       const diff = currentDate - prevFetchDate;
-      if (diff < 180_000 && this.#userData) {
-        console.info('Skipping user data fetch');
-        return this.#userData;
-      } else if (diff < 180_000) {
-        console.info('Fetching user data without sync');
-        const userdata = await get_user_data(this.#config, this.#viewKey);
-        this.#userData = userdata;
-
-        return userdata;
+      if (diff < 180_000) {
+        this.#isSyncInProgress = false;
+        console.info('user_data_sync done');
+        return;
       }
     }
 
@@ -900,6 +917,7 @@ export class IntMaxClient implements INTMAXClient {
       console.info('Synced account balance proof');
 
       // sync withdrawals
+      console.info('Start sync withdrawals');
       await retryWithAttempts(
         () => {
           return sync_withdrawals(this.#config, this.#viewKey, 0);
@@ -909,11 +927,10 @@ export class IntMaxClient implements INTMAXClient {
       );
       console.info('Synced withdrawals');
     } catch (e) {
-      console.info('Failed to sync account balance proof', e);
+      console.info('Failed to sync withdrawals', e);
     }
 
-    const userData = await get_user_data(this.#config, this.#viewKey);
-    this.#userData = userData;
+    this.#userData = await get_user_data(this.#config, this.#viewKey);
 
     const prevFetchDataArr =
       prevFetchData?.filter((data) => data.address.toLowerCase() !== this.address?.toLowerCase()) ?? [];
@@ -922,8 +939,38 @@ export class IntMaxClient implements INTMAXClient {
       address: this.address,
     });
     localStorageManager.setItem('user_data_fetch', prevFetchDataArr);
+    this.#isSyncInProgress = false;
+    console.info('user_data_sync done');
+  }
 
-    return userData;
+  async #fetchUserData(): Promise<JsUserData> {
+    const prevFetchData = localStorageManager.getItem<
+      {
+        fetchDate: number;
+        address: string;
+      }[]
+    >('user_data_fetch');
+    const prevFetchDateObj = prevFetchData?.find((data) => data.address.toLowerCase() === this.address.toLowerCase());
+
+    let userdata: JsUserData;
+    if (prevFetchDateObj && prevFetchDateObj.address.toLowerCase() === this.address.toLowerCase()) {
+      const prevFetchDate = prevFetchDateObj.fetchDate;
+      const currentDate = new Date().getTime();
+      const diff = currentDate - prevFetchDate;
+      if (diff < 180_000 && this.#userData) {
+        console.info('Skipping user data fetch');
+        return this.#userData;
+      } else if (diff < 180_000) {
+        console.info('Fetching user data without sync');
+        userdata = await get_user_data(this.#config, this.#viewKey);
+        this.#userData = userdata;
+        return userdata;
+      }
+    }
+    userdata = await get_user_data(this.#config, this.#viewKey);
+    this.#syncUserData();
+
+    return userdata;
   }
 
   async #prepareDepositToken({ token, isGasEstimation, amount, address }: PrepareEstimateDepositTransactionRequest) {
@@ -1160,25 +1207,14 @@ export class IntMaxClient implements INTMAXClient {
     }
   }
 
-  async #signConfimationFundsMessage(amount: string, miningAddress: string) {
-    await this.#walletClient.requestAddresses();
-
-    const [address] = await this.#walletClient.getAddresses();
-    const signature = await this.#walletClient.signMessage({
-      account: address,
-      message: spendFundsMessage(amount, miningAddress),
-    });
-
-    const verified = await this.#publicClient.verifyMessage({
-      address,
-      message: spendFundsMessage(amount, miningAddress),
-      signature,
-    });
-
-    if (!verified) {
-      throw new Error('Signature verification failed');
+  #startPeriodicUserDataUpdate(interval: number) {
+    if (this.#intervalId) {
+      clearInterval(this.#intervalId);
     }
-
-    return verified;
+    this.#intervalId = setInterval(async () => {
+      if (this.isLoggedIn && this.#viewKey) {
+        await this.#syncUserData();
+      }
+    }, interval);
   }
 }
