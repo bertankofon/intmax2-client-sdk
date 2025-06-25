@@ -159,7 +159,7 @@ const [receivedDeposits, receivedTransfers, sentTxs, requestedWithdrawals] = awa
 console.log('Received Deposits:', receivedDeposits);
 console.log('Received Transfers:', receivedTransfers);
 console.log('Sent Transfers:', sentTxs);
-console.log('Requested Withdrawals:', requestedWithdrawals);
+console.log('Requested Withdrawals:', requestedWithdrawals.withdrawals);
 ```
 
 ### Deposit Native Token (ETH)

@@ -108,6 +108,7 @@ export class IntMaxNodeClient implements INTMAXClient {
   readonly #publicClient: PublicClient;
   readonly #vaultHttpClient: AxiosInstance;
   readonly #predicateFetcher: PredicateFetcher;
+  readonly #environment: IntMaxEnvironment;
   readonly #urls: SDKUrls;
   // eslint-disable-next-line  @typescript-eslint/no-explicit-any
   readonly #cacheMap: Map<string, any> = new Map();
@@ -143,6 +144,7 @@ export class IntMaxNodeClient implements INTMAXClient {
             : DEVNET_ENV.key_vault_url,
     });
 
+    this.#environment = environment;
     this.#urls = environment === 'mainnet' ? MAINNET_ENV : environment === 'testnet' ? TESTNET_ENV : DEVNET_ENV;
 
     this.#config = this.#generateConfig(environment);
@@ -837,16 +839,20 @@ export class IntMaxNodeClient implements INTMAXClient {
       throw new Error("Can't get private key from mnemonic");
     }
 
-    const resp = await this.#vaultHttpClient.get<
-      {},
-      {
-        meta: {
-          isLegacy: boolean;
-        };
-      }
-    >(`/wallet/meta/${this.#ethAccount.address}`);
+    let isLegacy = false;
+    if (this.#environment !== 'mainnet') {
+      const resp = await this.#vaultHttpClient.get<
+        {},
+        {
+          meta: {
+            isLegacy: boolean;
+          };
+        }
+      >(`/wallet/meta/${this.#ethAccount.address}`);
+      isLegacy = resp.meta.isLegacy;
+    }
 
-    const keySet = await generate_intmax_account_from_eth_key(this.#config.network, hdKey, resp.meta.isLegacy);
+    const keySet = await generate_intmax_account_from_eth_key(this.#config.network, hdKey, isLegacy);
 
     this.address = keySet.address;
     this.#privateKey = keySet.key_pair;
@@ -970,28 +976,25 @@ export class IntMaxNodeClient implements INTMAXClient {
           token_address: token.contractAddress as `0x${string}`,
         });
 
-    let amlPermission: `0x${string}` = '0x';
-    if (!isGasEstimation) {
-      const predicateBody = this.#predicateFetcher.generateBody({
-        recipientSaltHash: salt,
-        tokenType: token.tokenType,
-        amountInWei: amountInDecimals,
-        tokenAddress: token.contractAddress,
-        tokenId: token.tokenIndex,
-      });
-      const predicateMessage = await this.#predicateFetcher.fetchPredicateSignature({
-        data: predicateBody,
-        from: this.#ethAccount.address as `0x${string}`,
-        to: this.#urls.predicate_contract_address as `0x${string}`,
-        msg_value: token.tokenType === TokenType.NATIVE ? amountInDecimals.toString() : '0',
-      });
+    const predicateBody = this.#predicateFetcher.generateBody({
+      recipientSaltHash: salt,
+      tokenType: token.tokenType,
+      amountInWei: amountInDecimals,
+      tokenAddress: token.contractAddress,
+      tokenId: token.tokenIndex,
+    });
+    const predicateMessage = await this.#predicateFetcher.fetchPredicateSignature({
+      data: predicateBody,
+      from: this.#ethAccount.address as `0x${string}`,
+      to: this.#urls.predicate_contract_address as `0x${string}`,
+      msg_value: token.tokenType === TokenType.NATIVE ? amountInDecimals.toString() : '0',
+    });
 
-      if (!predicateMessage.is_compliant) {
-        throw new Error('AML check failed');
-      }
-
-      amlPermission = this.#predicateFetcher.encodePredicateSignature(predicateMessage);
+    if (!predicateMessage.is_compliant) {
+      throw new Error('AML check failed');
     }
+
+    const amlPermission = this.#predicateFetcher.encodePredicateSignature(predicateMessage);
 
     return this.#prepareTransaction({
       recipientSaltHash: salt,

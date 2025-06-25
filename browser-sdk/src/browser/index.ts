@@ -157,6 +157,7 @@ const getWalletProviderType = (): string => {
 };
 
 export class IntMaxClient implements INTMAXClient {
+  readonly #environment: IntMaxEnvironment;
   #intervalId: number | null | NodeJS.Timeout = null;
   #isSyncInProgress: boolean = false;
   readonly #config: Config;
@@ -196,6 +197,7 @@ export class IntMaxClient implements INTMAXClient {
       transport: http(),
     });
 
+    this.#environment = environment;
     this.#urls = environment === 'mainnet' ? MAINNET_ENV : environment === 'testnet' ? TESTNET_ENV : DEVNET_ENV;
 
     this.#vaultHttpClient = axiosClientInit({
@@ -868,9 +870,25 @@ export class IntMaxClient implements INTMAXClient {
     }
 
     const [address] = await this.#walletClient.getAddresses();
-    const resp = await this.#vaultHttpClient.get<{}, WalletMetaResponse>(`/wallet/meta/${address}`);
 
-    const keySet = await generate_intmax_account_from_eth_key(this.#config.network, hdKey, resp.meta.isLegacy);
+    if (!isAddress(address)) {
+      throw new Error('Invalid address');
+    }
+
+    let isLegacy = false;
+    if (this.#environment !== 'mainnet') {
+      const resp = await this.#vaultHttpClient.get<
+        {},
+        {
+          meta: {
+            isLegacy: boolean;
+          };
+        }
+      >(`/wallet/meta/${address}`);
+      isLegacy = resp.meta.isLegacy;
+    }
+
+    const keySet = await generate_intmax_account_from_eth_key(this.#config.network, hdKey, isLegacy);
 
     this.address = keySet.address;
     this.#privateKey = keySet.key_pair;
@@ -989,37 +1007,34 @@ export class IntMaxClient implements INTMAXClient {
     const salt = isGasEstimation
       ? randomBytesHex(16)
       : await this.#depositToAccount({
-          amountInDecimals,
-          depositor: accounts[0],
-          pubkey: address,
-          tokenIndex: token.tokenIndex,
-          token_address: token.contractAddress as `0x${string}`,
-          token_type: token.tokenType,
-        });
-
-    let amlPermission: `0x${string}` = '0x';
-    if (!isGasEstimation) {
-      const predicateBody = this.#predicateFetcher.generateBody({
-        recipientSaltHash: salt,
-        tokenType: token.tokenType,
-        amountInWei: amountInDecimals,
-        tokenAddress: token.contractAddress,
-        tokenId: token.tokenIndex,
-      });
-      const [from] = await this.#walletClient.getAddresses();
-      const predicateMessage = await this.#predicateFetcher.fetchPredicateSignature({
-        data: predicateBody,
-        from: from as `0x${string}`,
-        to: this.#urls.predicate_contract_address as `0x${string}`,
-        msg_value: token.tokenType === TokenType.NATIVE ? amountInDecimals.toString() : '0',
+        amountInDecimals,
+        depositor: accounts[0],
+        pubkey: address,
+        tokenIndex: token.tokenIndex,
+        token_address: token.contractAddress as `0x${string}`,
+        token_type: token.tokenType,
       });
 
-      if (!predicateMessage.is_compliant) {
-        throw new Error('AML check failed');
-      }
+    const predicateBody = this.#predicateFetcher.generateBody({
+      recipientSaltHash: salt,
+      tokenType: token.tokenType,
+      amountInWei: amountInDecimals,
+      tokenAddress: token.contractAddress,
+      tokenId: token.tokenIndex,
+    });
+    const [from] = await this.#walletClient.getAddresses();
+    const predicateMessage = await this.#predicateFetcher.fetchPredicateSignature({
+      data: predicateBody,
+      from: from as `0x${string}`,
+      to: this.#urls.predicate_contract_address as `0x${string}`,
+      msg_value: token.tokenType === TokenType.NATIVE ? amountInDecimals.toString() : '0',
+    });
 
-      amlPermission = this.#predicateFetcher.encodePredicateSignature(predicateMessage);
+    if (!predicateMessage.is_compliant) {
+      throw new Error('AML check failed');
     }
+
+    const amlPermission = this.#predicateFetcher.encodePredicateSignature(predicateMessage);
 
     return this.#prepareTransaction({
       recipientSaltHash: salt,
