@@ -4,6 +4,8 @@ This SDK is a client library for the INTMAX API. It is designed to help you inte
 
 For detailed interface specifications and usage instructions, please refer to the documentation below:
 
+> ⚠️ Mainnet is not supported yet. Please use the Testnet.
+
 - [📘 INTMAX Client SDK Docs (API Reference)](https://aquatic-paperback-675.notion.site/INTMAX-Client-SDK-Docs-176d989987db8096a012d144ae0e0dba)
 - [🔧 Integration Guide](https://aquatic-paperback-675.notion.site/INTMAX-Client-SDK-Integration-Guide-208d989987db809db876ff8c79e78853)
 - [🧪 Examples on GitHub](https://github.com/InternetMaximalism/intmax2-client-sdk/tree/main/examples)
@@ -215,6 +217,7 @@ const nativeToken = tokens.find((token) => token.tokenIndex === 0);
 ### Fetch Transaction History
 
 Retrieves deposits, transfers, transactions, withdrawals in parallel:
+
 - fetchDeposits - Retrieves deposits received by the wallet
 - fetchTransfers - Retrieves transfers received by the wallet
 - fetchTransactions - Retrieves transactions sent from the wallet
@@ -223,17 +226,18 @@ Retrieves deposits, transfers, transactions, withdrawals in parallel:
 All returned data is sorted in descending chronological order (newest first).
 
 ```ts
-const [receivedDeposits, receivedTransfers, sentTxs, requestedWithdrawals] = await Promise.all([
-  client.fetchDeposits({}),
-  client.fetchTransfers({}),
-  client.fetchTransactions({}),
-  client.fetchWithdrawals(),
-]);
+const [receivedDeposits, receivedTransfers, sentTxs, requestedWithdrawals] =
+  await Promise.all([
+    client.fetchDeposits({}),
+    client.fetchTransfers({}),
+    client.fetchTransactions({}),
+    client.fetchWithdrawals(),
+  ]);
 
-console.log('Received Deposits:', receivedDeposits);
-console.log('Received Transfers:', receivedTransfers);
-console.log('Sent Transfers:', sentTxs);
-console.log('Requested Withdrawals:', requestedWithdrawals.withdrawals);
+console.log("Received Deposits:", receivedDeposits);
+console.log("Received Transfers:", receivedTransfers);
+console.log("Sent Transfers:", sentTxs);
+console.log("Requested Withdrawals:", requestedWithdrawals.withdrawals);
 ```
 
 ### Deposit Native Token (ETH)
@@ -252,7 +256,8 @@ if (token) {
 const depositParams = {
   amount: 0.000001, // 0.000001 ETH
   token,
-  address: "T6ubiG36LmNce6uzcJU3h5JR5FWa72jBBLUGmEPx5VXcFtvXnBB3bqice6uzcJU3h5JR5FWa72jBBLUGmEPx5VXcB3prnCZ", // recipient INTMAX address
+  address:
+    "T6ubiG36LmNce6uzcJU3h5JR5FWa72jBBLUGmEPx5VXcFtvXnBB3bqice6uzcJU3h5JR5FWa72jBBLUGmEPx5VXcB3prnCZ", // recipient INTMAX address
 };
 
 // Dry-run gas estimation
@@ -293,7 +298,8 @@ if (!token) {
 const depositParams = {
   amount: 0.000001, // 0.000001 USDC
   token,
-  address: "T6ubiG36LmNce6uzcJU3h5JR5FWa72jBBLUGmEPx5VXcFtvXnBB3bqice6uzcJU3h5JR5FWa72jBBLUGmEPx5VXcB3prnCZ", // recipient INTMAX address
+  address:
+    "T6ubiG36LmNce6uzcJU3h5JR5FWa72jBBLUGmEPx5VXcFtvXnBB3bqice6uzcJU3h5JR5FWa72jBBLUGmEPx5VXcB3prnCZ", // recipient INTMAX address
 };
 
 // Dry-run gas estimation
@@ -320,7 +326,8 @@ const token = {
 const depositParams = {
   amount: 1, // Amount of the token for erc721 should be 1, for erc1155 can be more than 1
   token,
-  address: "T6ubiG36LmNce6uzcJU3h5JR5FWa72jBBLUGmEPx5VXcFtvXnBB3bqice6uzcJU3h5JR5FWa72jBBLUGmEPx5VXcB3prnCZ", // recipient INTMAX address
+  address:
+    "T6ubiG36LmNce6uzcJU3h5JR5FWa72jBBLUGmEPx5VXcFtvXnBB3bqice6uzcJU3h5JR5FWa72jBBLUGmEPx5VXcB3prnCZ", // recipient INTMAX address
 };
 
 // Estimate gas if need to show for user
