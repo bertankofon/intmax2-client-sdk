@@ -21,12 +21,14 @@ import {
   axiosClientInit,
   BroadcastTransactionRequest,
   BroadcastTransactionResponse,
+  checkIsValidBlockBuilderFee,
   ClaimWithdrawalTransactionResponse,
   ConstructorNodeParams,
   ContractWithdrawal,
   DEVNET_ENV,
   FeeResponse,
   FetchTransactionsRequest,
+  FetchTransactionsResponse,
   FetchWithdrawalsRequest,
   FetchWithdrawalsResponse,
   generateEncryptionKey,
@@ -78,7 +80,9 @@ import {
   get_user_data,
   JsFeeQuote,
   JsFlatG2,
+  JsMetaData,
   JsMetaDataCursor,
+  JsTransferFeeQuote,
   JsTransferRequest,
   JsTxRequestMemo,
   JsTxResult,
@@ -149,9 +153,7 @@ export class IntMaxNodeClient implements INTMAXClient {
     //         : DEVNET_ENV.key_vault_url,
     // });
     this.#vaultHttpClient = axiosClientInit({
-      baseURL: environment === 'testnet'
-        ? TESTNET_ENV.key_vault_url
-        : DEVNET_ENV.key_vault_url,
+      baseURL: environment === 'testnet' ? TESTNET_ENV.key_vault_url : DEVNET_ENV.key_vault_url,
     });
 
     this.#environment = environment;
@@ -409,6 +411,12 @@ export class IntMaxNodeClient implements INTMAXClient {
       if (!fee) {
         throw new Error('Failed to quote transfer fee');
       }
+      if (fee.fee) {
+        if (!checkIsValidBlockBuilderFee(fee.fee, fee.is_registration_block)) {
+          await this.#indexerFetcher.fetchBlockBuilderUrl();
+          throw new Error('Invalid fee from block builder. Try again...');
+        }
+      }
 
       let withdrawalTransfers: JsWithdrawalTransfers | undefined;
 
@@ -472,75 +480,115 @@ export class IntMaxNodeClient implements INTMAXClient {
   }
 
   // Send/Withdrawals
-  async fetchTransactions(_params: FetchTransactionsRequest): Promise<Transaction[]> {
+  async fetchTransactions(
+    { cursor, limit }: FetchTransactionsRequest = { cursor: null, limit: 256 },
+  ): Promise<FetchTransactionsResponse> {
     this.#checkAllowanceToExecuteMethod();
+    if (limit && limit > 256) {
+      throw new Error('Limit cannot be greater than 256');
+    }
 
-    const data = await fetch_tx_history(this.#config, this.#viewKey, new JsMetaDataCursor(null, 'desc'));
+    const data = await fetch_tx_history(this.#config, this.#viewKey, new JsMetaDataCursor(cursor, 'desc', limit));
 
-    return data.history
-      .map((tx) => {
-        return wasmTxToTx(
-          this.#config,
-          {
-            data: tx.data,
-            meta: tx.meta,
-            status: tx.status,
-            txType: TransactionType.Send,
-            free: tx.free,
-          },
-          this.#tokenFetcher.tokens,
-          this.address,
-        );
-      })
-      .filter(Boolean) as Transaction[];
+    return {
+      pagination: {
+        next_cursor: data.cursor_response.next_cursor ?? null,
+        has_more: data.cursor_response.has_more,
+        total_count: data.cursor_response.total_count,
+      },
+      items: data.history
+        .map((tx) => {
+          return wasmTxToTx(
+            this.#config,
+            {
+              data: tx.data,
+              meta: tx.meta,
+              status: tx.status,
+              txType: TransactionType.Send,
+              free: tx.free,
+            },
+            this.#tokenFetcher.tokens,
+            this.address,
+          );
+        })
+        .filter(Boolean) as Transaction[],
+    };
   }
 
   // Receive
-  async fetchTransfers(_params: FetchTransactionsRequest): Promise<Transaction[]> {
+  async fetchTransfers(
+    { cursor, limit }: FetchTransactionsRequest = { cursor: null, limit: 256 },
+  ): Promise<FetchTransactionsResponse> {
     this.#checkAllowanceToExecuteMethod();
+    if (limit && limit > 256) {
+      throw new Error('Limit cannot be greater than 256');
+    }
 
-    const data = await fetch_transfer_history(this.#config, this.#viewKey, new JsMetaDataCursor(null, 'desc'));
+    const data = await fetch_transfer_history(this.#config, this.#viewKey, new JsMetaDataCursor(cursor, 'desc', limit));
 
-    return data.history
-      .map((tx) => {
-        return wasmTxToTx(
-          this.#config,
-          {
-            data: tx.data,
-            meta: tx.meta,
-            status: tx.status,
-            txType: TransactionType.Receive,
-            free: tx.free,
-          },
-          this.#tokenFetcher.tokens,
-          this.address,
-        );
-      })
-      .filter(Boolean) as Transaction[];
+    return {
+      pagination: {
+        next_cursor: data.cursor_response.next_cursor ?? null,
+        has_more: data.cursor_response.has_more,
+        total_count: data.cursor_response.total_count,
+      },
+      items: data.history
+        .map((tx) => {
+          return wasmTxToTx(
+            this.#config,
+            {
+              data: tx.data,
+              meta: tx.meta,
+              status: tx.status,
+              txType: TransactionType.Receive,
+              free: tx.free,
+            },
+            this.#tokenFetcher.tokens,
+            this.address,
+          );
+        })
+        .filter(Boolean) as Transaction[],
+    };
   }
 
   // Deposit
-  async fetchDeposits(_params: FetchTransactionsRequest): Promise<Transaction[]> {
+  async fetchDeposits(
+    { cursor, limit }: FetchTransactionsRequest = { cursor: null, limit: 256 },
+  ): Promise<FetchTransactionsResponse> {
     this.#checkAllowanceToExecuteMethod();
+    if (limit && limit > 256) {
+      throw new Error('Limit cannot be greater than 256');
+    }
 
-    const data = await fetch_deposit_history(this.#config, this.#viewKey, new JsMetaDataCursor(null, 'desc'));
+    const data = await fetch_deposit_history(
+      this.#config,
+      this.#viewKey,
+      new JsMetaDataCursor(cursor as JsMetaData, 'desc'),
+    );
 
-    return data.history
-      .map((tx) => {
-        return wasmTxToTx(
-          this.#config,
-          {
-            data: tx.data,
-            meta: tx.meta,
-            status: tx.status,
-            txType: TransactionType.Deposit,
-            free: tx.free,
-          },
-          this.#tokenFetcher.tokens,
-          this.address,
-        );
-      })
-      .filter(Boolean) as Transaction[];
+    return {
+      pagination: {
+        next_cursor: data.cursor_response.next_cursor ?? null,
+        has_more: data.cursor_response.has_more,
+        total_count: data.cursor_response.total_count,
+      },
+      items: data.history
+        .map((tx) => {
+          return wasmTxToTx(
+            this.#config,
+            {
+              data: tx.data,
+              meta: tx.meta,
+              status: tx.status,
+              txType: TransactionType.Deposit,
+              free: tx.free,
+            },
+            this.#tokenFetcher.tokens,
+            this.address,
+          );
+        })
+        .filter(Boolean) as Transaction[],
+    };
   }
 
   async withdraw({ amount, address, token, claim_beneficiary }: WithdrawRequest): Promise<WithdrawalResponse> {
@@ -779,7 +827,15 @@ export class IntMaxNodeClient implements INTMAXClient {
       await this.#indexerFetcher.getBlockBuilderUrl(),
       this.#spendPub as string,
       0,
-    )) as JsFeeQuote;
+    )) as JsTransferFeeQuote;
+
+    if (transferFee.fee) {
+      if (!checkIsValidBlockBuilderFee(transferFee.fee, transferFee.is_registration_block)) {
+        await this.#indexerFetcher.fetchBlockBuilderUrl();
+        throw new Error('Invalid fee from block builder. Try again...');
+      }
+    }
+
     return {
       beneficiary: transferFee.beneficiary,
       fee: transferFee.fee,
