@@ -12,6 +12,7 @@ import { Header } from './components/Layout/Header'
 import { LoadingSpinner } from './components/Common/LoadingSpinner'
 import { TransferForm } from './components/Wallet/TransferForm'
 import { QuickTransferButton } from './components/Wallet/QuickTransferButton'
+import { BatchTransferForm } from './components/Wallet/BatchTransferForm'
 
 function App() {
   const { 
@@ -97,6 +98,10 @@ function App() {
               </div>
               <div className="grid-item">
                 <WithdrawForm client={client} />
+              </div>
+              
+              <div className="grid-item grid-full">
+                <BatchTransferForm client={client} />
               </div>
               
               <div className="grid-item grid-full">
