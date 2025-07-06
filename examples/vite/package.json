@@ -9,6 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@scure/bip32": "^1.7.0",
+    "@scure/bip39": "^1.6.0",
+    "axios": "^1.10.0",
     "intmax2-client-sdk": "file:../../browser-sdk",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

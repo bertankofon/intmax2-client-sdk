@@ -8,6 +8,15 @@ importers:
 
   .:
     dependencies:
+      '@scure/bip32':
+        specifier: ^1.7.0
+        version: 1.7.0
+      '@scure/bip39':
+        specifier: ^1.6.0
+        version: 1.6.0
+      axios:
+        specifier: ^1.10.0
+        version: 1.10.0
       intmax2-client-sdk:
         specifier: file:../../browser-sdk
         version: file:../../browser-sdk(typescript@5.8.3)
